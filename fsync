@@ -3,15 +3,115 @@
 NAME='fsync'
 AUTHOR='Matthew Maynes'
 VERSION='0.0.2'
+HELP='
+Usage: fsync [OPTIONS ...] SOURCE DESTINATION\n
+\n
+  Synchronizes the source directory with the destination\n
+  directory. The directories will be synced initially and\n
+  then a monitor will be attached to SOURCE to track any\n
+  changes made.
+\n
+  Options:\n
+\n
+\t  -h, --help\t\t      Display this message\n
+\t  --version\t\t       Display the version of this script\n
+\n
+'
+
+#####################
+#     VARIABLES     #
+#####################
+
+# The source directory to watch for changes and 
+# keep in sync with the destination.
+#
+# @type {string}
+SOURCE=''
+
+# The destination directory to keep synchronized with
+# the source
+#
+# @type {string}
+DEST=''
+
+# The paths that have been input. This is used when 
+# parsing the command line arguments. It holds a copy
+# of the input and destination locations
+#
+# @type {array}
+PATHS=()
+
+#####################
+#     FUNCTIONS     #
+#####################
+
+function info {
+    echo -e $NAME ' ' $VERSION '\n' $HELP
+}
+
+function sync {
+    rsync --relative --checksum --recursive --progress $1 $2
+}
+
+function watch {
+    while read -d "" file;
+    do
+        if [ -e $file  ];
+        then
+            change=$(sed "s/$1/$1\/./g" <<< $file);
+            echo "Change detected in " $file;
+            sync $change $2
+        fi
+    done < <(fswatch -0 -r -e .git/ -e *.swp $1)
+}
 
 
-while read -d "" file;
-do
-    if [ -e $file  ];
-    then
-        change=$(sed 's/careclient/careclient\/./g' <<< $file);
-        echo "Change detected in " $file;
-        rsync --relative --checksum --recursive --progress $change matt@hedera1.bedarra.com:/IVY/html/dev/matt;
-    fi
-done < <(fswatch -0 -r -e .git/ -e *.swp careclient)
+####################
+#    PARSE ARGS    #
+####################
+IFS=' ' read -ra ARGV <<< $@
+
+for i in "${ARGV[@]}"; do
+    case $i in
+        '-h' | '--help' )
+            info;
+            exit 0;;
+        '--version' )
+            echo -e $NAME ' ' $VERSION;;
+        -* )
+            echo 'Unknown argument ' $i;
+            exit 1;;
+        *)
+            PATHS+=("$i");;
+    esac
+done
+
+
+if [ ${#PATHS[@]} -lt 2 ]; then
+    echo 'Missing input path';
+    echo 'See fysnc --help for usage';
+    exit 1;
+fi
+
+# Get a reference to the source and destination locations
+SOURCE=${PATHS[0]};
+DEST=${PATHS[1]};
+
+
+# Perform an initial synchronization of the source location.
+echo "Performing initial synchronization of $SOURCE to $DEST"
+sync $SOURCE $DEST
+echo "Synchronization complete"
+
+# Watch the source location for changes and sync the 
+# destination when there is one
+echo "Watching $SOURCE for changes"
+watch $SOURCE $DEST
+
+
+
+
+
+
+
 
