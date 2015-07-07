@@ -6,15 +6,22 @@ VERSION='0.0.2'
 HELP='
 Usage: fsync [OPTIONS ...] SOURCE DESTINATION\n
 \n
-  Synchronizes the source directory with the destination\n
-  directory. The directories will be synced initially and\n
-  then a monitor will be attached to SOURCE to track any\n
-  changes made.\n
+  Synchronizes the source directory with the destination directory.\n
+  The directories will be synced initially and then a monitor will be\n
+  attached to SOURCE to track any changes made.\n
 \n
   Options:\n
 \n
-\t  -h, --help\t\t      Display this message\n
-\t  --version\t\t       Display the version of this script\n
+\t  -c, --checksum\t\t  Use checksum comparisons instead of time stamps\n
+\t\t\t\t                This takes slightly more resources to compute but\n
+\t\t\t\t                is more accurate than times, especially when dealing\n
+\t\t\t\t                with remote servers.\n
+\n
+\t  --progress\t\t      Display progress while synchronizing files\n
+\n
+\t  -h, --help\t\t      Display this message and exit\n
+\n
+\t  --version\t\t       Display the version of this script and exit\n
 \n
 '
 
@@ -34,6 +41,11 @@ SOURCE=''
 # @type {string}
 DEST=''
 
+# A list of special arguments for rsync
+#
+# @type {string}
+RSYNC='--recursive --relative'
+
 # The paths that have been input. This is used when 
 # parsing the command line arguments. It holds a copy
 # of the input and destination locations
@@ -46,21 +58,25 @@ PATHS=()
 #####################
 
 function info {
-    echo -e $NAME ' ' $VERSION '\n' $HELP
+    echo -e " $NAME $VERSION\n$HELP"
 }
 
-function sync {
-    rsync --relative --checksum --recursive --progress $1 $2
-}
-
+# Watches a given directory using fswatch for a file 
+# change. When there is a change it synchronizes
+# a destination directory.
+#
+# @param {string} Any arguments for rsync
+# @param {string} The source directory to watch
+# @param {string} The destination to keep synchronized
 function watch {
+    # While there is 
     while read -d "" file;
     do
         if [ -e $file  ];
         then
             change=$(sed "s/$1/$1\/./g" <<< $file);
-            echo "Change detected in " $file;
-            sync $change $2
+            echo "Change detected in $file";
+            rsync $RSYNC $change $2
         fi
     done < <(fswatch -0 -r -e .git/ -e *.swp $1)
 }
@@ -77,7 +93,10 @@ for i in "${ARGV[@]}"; do
             info;
             exit 0;;
         '--version' )
-            echo -e $NAME ' ' $VERSION;;
+            echo -e "$NAME $VERSION";
+            exit 0;;
+        '-c' |  '--checksum' | '--progress' )
+            RSYNC="$RSYNC $i";;
         -* )
             echo 'Unknown argument ' $i;
             exit 1;;
@@ -100,7 +119,7 @@ DEST=${PATHS[1]};
 
 # Perform an initial synchronization of the source location.
 echo "Performing initial synchronization of $SOURCE to $DEST"
-sync $SOURCE $DEST
+rsync $RSYNC $SOURCE $DEST
 echo "Synchronization complete"
 
 # Watch the source location for changes and sync the 
