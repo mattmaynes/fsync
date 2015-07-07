@@ -9,7 +9,7 @@ Usage: fsync [OPTIONS ...] SOURCE DESTINATION\n
   Synchronizes the source directory with the destination\n
   directory. The directories will be synced initially and\n
   then a monitor will be attached to SOURCE to track any\n
-  changes made.
+  changes made.\n
 \n
   Options:\n
 \n
