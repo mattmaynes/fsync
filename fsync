@@ -1,0 +1,17 @@
+#!/bin/bash
+
+NAME='fsync'
+AUTHOR='Matthew Maynes'
+VERSION='0.0.2'
+
+
+while read -d "" file;
+do
+    if [ -e $file  ];
+    then
+        change=$(sed 's/careclient/careclient\/./g' <<< $file);
+        echo "Change detected in " $file;
+        rsync --relative --checksum --recursive --progress $change matt@hedera1.bedarra.com:/IVY/html/dev/matt;
+    fi
+done < <(fswatch -0 -r -e .git/ -e *.swp careclient)
+
