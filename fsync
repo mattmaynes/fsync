@@ -69,15 +69,30 @@ function info {
 # @param {string} The source directory to watch
 # @param {string} The destination to keep synchronized
 function watch {
-    # While there is 
+    # While there are more changes synchronize them with
+    # the destination location
     while read -d "" file;
     do
+        # fswatch sometimes shows index files that have
+        # changed but they don't actually exist. Ensure
+        # that each changed file actually exists
         if [ -e $file  ];
         then
+            # All paths need to be relative to the 
+            # SOURCE directory. To do that we need to add
+            # /. to the path so rsync knows where the base is
             change=$(sed "s/$1/$1\/./g" <<< $file);
+
+            # Report the change
             echo "Change detected in $file";
+            
+            # Synchronize the files by using rsync
             rsync $RSYNC $change $2
         fi
+    # fswatch behaves as a notification stream that will
+    # trigger the while loop for each change. The < <()
+    # syntax allows the output of fswatch to be piped 
+    # into the input of the while loop
     done < <(fswatch -0 -r -e .git/ -e *.swp $1)
 }
 
@@ -87,6 +102,7 @@ function watch {
 ####################
 IFS=' ' read -ra ARGV <<< $@
 
+# Iterate over each argument in the input vector
 for i in "${ARGV[@]}"; do
     case $i in
         '-h' | '--help' )
@@ -97,15 +113,20 @@ for i in "${ARGV[@]}"; do
             exit 0;;
         '-c' |  '--checksum' | '--progress' )
             RSYNC="$RSYNC $i";;
+        
+        # Default case for all flags
         -* )
             echo 'Unknown argument ' $i;
             exit 1;;
+        
+        # Catch data and throw it in the PATHS array
         *)
             PATHS+=("$i");;
     esac
 done
 
-
+# There must be at least 2 PATHS to continue. One for the
+# input and one for the output. 
 if [ ${#PATHS[@]} -lt 2 ]; then
     echo 'Missing input path';
     echo 'See fysnc --help for usage';
@@ -126,11 +147,6 @@ echo "Synchronization complete"
 # destination when there is one
 echo "Watching $SOURCE for changes"
 watch $SOURCE $DEST
-
-
-
-
-
 
 
 
