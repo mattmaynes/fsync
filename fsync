@@ -39,9 +39,13 @@ Usage: fsync [OPTIONS ...] SOURCE DESTINATION\n
 \t\t\t\t                is more accurate than times, especially when dealing\n
 \t\t\t\t                with remote servers.\n
 \n
+\t  -h, --help\t\t      Display this message and quit\n
+\n
+\t  -l, --log-level\t\t The level of logging to show. [DEBUG, INFO, WARN, ERROR]\n
+\n
 \t  --progress\t\t      Display progress while synchronizing files\n
 \n
-\t  -h, --help\t\t      Display this message and exit\n
+\t  -e, --exclude\t\t   A regular expression representing the files to exclude\n
 \n
 \t  --version\t\t       Display the version of this script and exit\n
 \n
@@ -68,6 +72,11 @@ DEST=''
 # @type {string}
 RSYNC='--recursive --relative'
 
+# A list of special arguments for fswatch
+#
+# @type {string}
+FSWATCH='-0 --recursive'
+
 # The paths that have been input. This is used when 
 # parsing the command line arguments. It holds a copy
 # of the input and destination locations
@@ -75,12 +84,55 @@ RSYNC='--recursive --relative'
 # @type {array}
 PATHS=()
 
+# The levels of logging that are available
+#
+# @type {array}
+LOG_LEVELS=(DEBUG INFO WARN ERROR)
+
+# The level of logging that should be printed to
+# stdout
+#
+# @type {string}
+LOG_LEVEL=2
+
 #####################
 #     FUNCTIONS     #
 #####################
 
+# Prints the help message for this script
+# to stdout
 function info {
     echo -e " $NAME $VERSION\n$HELP"
+}
+
+# Returns a numeric version of the given log level
+#
+# @param {string} The log level
+#
+# @return {number} The index of the item or -1 if not found
+function logLevel {
+    i=0
+    for level in "${LOG_LEVELS[@]}"; do
+        if [ "$level" = "$1"  ]; then
+            echo $i
+            return
+        else
+            ((i++))
+        fi
+    done
+    echo "-1"
+}
+ 
+# Logs a message to stdout using a log level.
+# This functions relies on the global LOG_LEVEL
+# variable to determine what messages to show.
+# 
+# @param {string} The log level
+# @param {string} The message to log
+function log {
+    if [ $(logLevel $1) -gt $LOG_LEVEL ]; then
+        echo "[$1] $(date '+<%Y-%m-%dT%H:%M:%S>') $2"
+    fi
 }
 
 # Watches a given directory using fswatch for a file 
@@ -106,7 +158,7 @@ function watch {
             change=$(sed "s/$1/$1\/./g" <<< $file);
 
             # Report the change
-            echo "Change detected in $file";
+            log 'INFO' "Change detected in $file";
             
             # Synchronize the files by using rsync
             rsync $RSYNC $change $2
@@ -115,7 +167,7 @@ function watch {
     # trigger the while loop for each change. The < <()
     # syntax allows the output of fswatch to be piped 
     # into the input of the while loop
-    done < <(fswatch -0 -r -e .git/ -e *.swp $1)
+    done < <(fswatch $FSWATCH $1)
 }
 
 
@@ -123,6 +175,9 @@ function watch {
 #    PARSE ARGS    #
 ####################
 IFS=' ' read -ra ARGV <<< $@
+FDATA=0
+RDATA=0
+LDATA=0
 
 # Iterate over each argument in the input vector
 for i in "${ARGV[@]}"; do
@@ -130,27 +185,39 @@ for i in "${ARGV[@]}"; do
         '-h' | '--help' )
             info;
             exit 0;;
+        '-l' | '--log-level' )
+            LDATA=1;;
         '--version' )
             echo -e "$NAME $VERSION";
             exit 0;;
         '-c' |  '--checksum' | '--progress' )
             RSYNC="$RSYNC $i";;
-        
+        '-e' | '--exclude' )
+            FDATA=1;
+            FSWATCH="$FSWATCH $i";;
         # Default case for all flags
         -* )
-            echo 'Unknown argument ' $i;
-            exit 1;;
-        
+            log 'WARN' 'Unknown argument ' $i;;
         # Catch data and throw it in the PATHS array
         *)
-            PATHS+=("$i");;
+            # If the data is for fswatch
+            if [ $FDATA -eq 1 ]; then
+                FDATA=0
+                FSWATCH="$FSWATCH $i"
+            elif [ $LDATA -eq 1 ]; then
+                LDATA=0
+                LOG_LEVEL=$(logLevel $i)
+            # Otherwise it is a path
+            else
+                PATHS+=("$i")
+            fi;;
     esac
 done
 
 # There must be at least 2 PATHS to continue. One for the
 # input and one for the output. 
 if [ ${#PATHS[@]} -lt 2 ]; then
-    echo 'Missing input path';
+    log 'ERROR' 'Missing input path';
     echo 'See fysnc --help for usage';
     exit 1;
 fi
@@ -161,13 +228,13 @@ DEST=${PATHS[1]};
 
 
 # Perform an initial synchronization of the source location.
-echo "Performing initial synchronization of $SOURCE to $DEST"
+log 'INFO' "Performing initial synchronization of $SOURCE to $DEST"
 rsync $RSYNC $SOURCE $DEST
-echo "Synchronization complete"
+log 'INFO' "Synchronization complete"
 
 # Watch the source location for changes and sync the 
 # destination when there is one
-echo "Watching $SOURCE for changes"
+log 'INFO' "Watching $SOURCE for changes"
 watch $SOURCE $DEST
 
 
