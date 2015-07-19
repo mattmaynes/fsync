@@ -24,31 +24,22 @@
 
 NAME='fsync'
 AUTHOR='Matthew Maynes'
-VERSION='0.1.0'
+VERSION='0.1.1'
 HELP='
-Usage: fsync [OPTIONS ...] SOURCE DESTINATION\n
-\n
-  Synchronizes the source directory with the destination directory.\n
-  The directories will be synced initially and then a monitor will be\n
-  attached to SOURCE to track any changes made.\n
-\n
-  Options:\n
-\n
-\t  -c, --checksum\t\t  Use checksum comparisons instead of time stamps\n
-\t\t\t\t                This takes slightly more resources to compute but\n
-\t\t\t\t                is more accurate than times, especially when dealing\n
-\t\t\t\t                with remote servers.\n
-\n
-\t  -h, --help\t\t      Display this message and quit\n
-\n
-\t  -l, --log-level\t\t The level of logging to show. [DEBUG, INFO, WARN, ERROR]\n
-\n
-\t  --progress\t\t      Display progress while synchronizing files\n
-\n
-\t  -e, --exclude\t\t   A regular expression representing the files to exclude\n
-\n
-\t  --version\t\t       Display the version of this script and exit\n
-\n
+  Usage: fsync [OPTIONS ...] SOURCE DESTINATION
+    Synchronizes the source directory with the destination directory.
+    The directories will be synced initially and then a monitor will be
+    attached to SOURCE to track any changes made.
+    
+  Options:
+    -c, --checksum      Use checksum comparisons instead of time stamps. This takes 
+                        slightly more resources to compute but is more accurate than 
+                        times, especially when dealing with remote servers.
+    -h, --help          Display this message and quit
+    -l, --log-level     The level of logging to show. [DEBUG, INFO, WARN, ERROR]
+    --progress          Display progress while synchronizing files
+    -e, --exclude       A regular expression representing the files to exclude
+    --version           Display the version of this script and exit
 '
 
 #####################
@@ -70,7 +61,7 @@ DEST=''
 # A list of special arguments for rsync
 #
 # @type {string}
-RSYNC='--recursive --relative'
+RSYNC='--recursive'
 
 # A list of special arguments for fswatch
 #
@@ -102,7 +93,7 @@ LOG_LEVEL=2
 # Prints the help message for this script
 # to stdout
 function info {
-    echo -e " $NAME $VERSION\n$HELP"
+    echo -e "$NAME $VERSION $HELP"
 }
 
 # Returns a numeric version of the given log level
@@ -130,9 +121,21 @@ function logLevel {
 # @param {string} The log level
 # @param {string} The message to log
 function log {
-    if [ $(logLevel $1) -gt $LOG_LEVEL ]; then
+    if [ $(logLevel $1) -ge $LOG_LEVEL ]; then
         echo "[$1] $(date '+<%Y-%m-%dT%H:%M:%S>') $2"
     fi
+}
+
+# Returns a relative path name using a base and
+# a path. The result is the path with /./ following
+# the end of base path
+#
+# @param {string} The base path
+# @param {string} The path to insert /./ into
+#
+# @return {string} The input path made relative
+function prel {
+    echo $(sed "s,$1,$1\/.\/,g" <<< $2)
 }
 
 # Watches a given directory using fswatch for a file 
@@ -152,16 +155,15 @@ function watch {
         # that each changed file actually exists
         if [ -e $file  ];
         then
-            # All paths need to be relative to the 
-            # SOURCE directory. To do that we need to add
-            # /. to the path so rsync knows where the base is
-            change=$(sed "s/$1/$1\/./g" <<< $file);
-
             # Report the change
             log 'INFO' "Change detected in $file";
             
+            # Create the relative path
+            change=$(prel $1 $file);
+
             # Synchronize the files by using rsync
-            rsync $RSYNC $change $2
+            log 'DEBUG' "Issuing sync: rsync $RSYNC --relative $change $2";
+            rsync $RSYNC --relative $change $2
         fi
     # fswatch behaves as a notification stream that will
     # trigger the while loop for each change. The < <()
@@ -181,6 +183,7 @@ LDATA=0
 
 # Iterate over each argument in the input vector
 for i in "${ARGV[@]}"; do
+    log 'DEBUG' "Parsing argument $i";
     case $i in
         '-h' | '--help' )
             info;
@@ -197,9 +200,11 @@ for i in "${ARGV[@]}"; do
             FSWATCH="$FSWATCH $i";;
         # Default case for all flags
         -* )
-            log 'WARN' 'Unknown argument ' $i;;
+            log 'WARN' "Unknown argument $i";;
         # Catch data and throw it in the PATHS array
         *)
+
+            log 'DEBUG' "Found data $i"
             # If the data is for fswatch
             if [ $FDATA -eq 1 ]; then
                 FDATA=0
@@ -223,12 +228,13 @@ if [ ${#PATHS[@]} -lt 2 ]; then
 fi
 
 # Get a reference to the source and destination locations
-SOURCE=${PATHS[0]};
-DEST=${PATHS[1]};
+SOURCE=${PATHS[0]}'/';
+DEST=${PATHS[1]}'/';
 
 
 # Perform an initial synchronization of the source location.
 log 'INFO' "Performing initial synchronization of $SOURCE to $DEST"
+log 'DEBUG' "Issuing sync: rsync $RSYNC $SOURCE $DEST"
 rsync $RSYNC $SOURCE $DEST
 log 'INFO' "Synchronization complete"
 
