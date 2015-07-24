@@ -50,7 +50,7 @@ HELP='
 # keep in sync with the destination.
 #
 # @type {string}
-SOURCE=''
+SRC=''
 
 # The destination directory to keep synchronized with
 # the source
@@ -122,7 +122,7 @@ function logLevel {
 # @param {string} The message to log
 function log {
     if [ $(logLevel $1) -ge $LOG_LEVEL ]; then
-        echo "[$1] $(date '+<%Y-%m-%dT%H:%M:%S>') $2"
+        echo -e "[$1]\t$(date '+<%Y-%m-%dT%H:%M:%S>') $2"
     fi
 }
 
@@ -146,6 +146,8 @@ function prel {
 # @param {string} The source directory to watch
 # @param {string} The destination to keep synchronized
 function watch {
+    log 'DEBUG' "Starting fswatch $FSWATCH $1"
+
     # While there are more changes synchronize them with
     # the destination location
     while read -d "" file;
@@ -228,20 +230,28 @@ if [ ${#PATHS[@]} -lt 2 ]; then
 fi
 
 # Get a reference to the source and destination locations
-SOURCE=${PATHS[0]}'/';
-DEST=${PATHS[1]}'/';
+SRC=${PATHS[0]};
+DEST=${PATHS[1]};
 
+# Fix the trailing slash in the destination and the source
+if [ '/' != ${DEST[${#DEST[@]} - 1]} ]; then
+    DEST="$DEST/"
+fi
+
+if [ '/' != ${SRC[${#SRC[@]} - 1]} ]; then
+    SRC="$SRC/"
+fi
 
 # Perform an initial synchronization of the source location.
-log 'INFO' "Performing initial synchronization of $SOURCE to $DEST"
-log 'DEBUG' "Issuing sync: rsync $RSYNC $SOURCE $DEST"
-rsync $RSYNC $SOURCE $DEST
+log 'INFO' "Performing initial synchronization of $SRC to $DEST"
+log 'DEBUG' "Issuing sync: rsync $RSYNC $SRC $DEST"
+rsync $RSYNC $SRC $DEST
 log 'INFO' "Synchronization complete"
 
 # Watch the source location for changes and sync the 
 # destination when there is one
-log 'INFO' "Watching $SOURCE for changes"
-watch $SOURCE $DEST
+log 'INFO' "Watching $SRC for changes"
+watch $SRC $DEST
 
 
 
