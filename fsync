@@ -198,7 +198,7 @@ for i in "${ARGV[@]}"; do
         '--version' )
             echo -e "$NAME $VERSION";;
         '--poll' )
-            FSWTACH="$FSWATCH -m poll_monitor";;
+            FSWATCH="$FSWATCH -m poll_monitor";;
         '-c' |  '--checksum' | '--progress' )
             RSYNC="$RSYNC $i";;
         '-e' | '--exclude' )
