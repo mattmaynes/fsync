@@ -37,9 +37,12 @@ HELP='
                         times, especially when dealing with remote servers.
     -h, --help          Display this message and quit
     -l, --log-level     The level of logging to show. [DEBUG, INFO, WARN, ERROR]
+    --poll              Use the poll monitor instead of the system monitor for fswatch.
+                        (On Mac OS X there is a bug with fswatch where notifications
+                        are being missed. If you experience this then use --poll)
     --progress          Display progress while synchronizing files
     -e, --exclude       A regular expression representing the files to exclude
-    --version           Display the version of this script and exit
+    --version           Display the version of this script
 '
 
 #####################
@@ -193,8 +196,9 @@ for i in "${ARGV[@]}"; do
         '-l' | '--log-level' )
             LDATA=1;;
         '--version' )
-            echo -e "$NAME $VERSION";
-            exit 0;;
+            echo -e "$NAME $VERSION";;
+        '--poll' )
+            FSWTACH="$FSWATCH -m poll_monitor";;
         '-c' |  '--checksum' | '--progress' )
             RSYNC="$RSYNC $i";;
         '-e' | '--exclude' )
